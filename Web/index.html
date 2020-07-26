@@ -1,0 +1,244 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+<meta charset="utf-8">
+<title>DHT DashBoard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<!-- jQuery -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+<!-- Material Design fonts -->
+<link rel="stylesheet" href="http://fonts.googleapis.com/css?family=Roboto:300,400,500,700" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+<!-- canvasjs -->
+<script src="js/jquery.canvasjs.min.js"></script>
+<!-- Bootstrap -->
+<link rel="stylesheet" href="css/bootstrap.min.css">
+<link rel="stylesheet" href="css/bootstrap-material-design.min.css">
+<link rel="stylesheet" href="css/ripples.min.css">
+<script src="js/bootstrap.min.js"></script>
+<script src="js/material.min.js"></script>
+<script src="js/ripples.min.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/3.3.2/firebase.js"></script>
+<!-- Animate.css -->
+<link rel="stylesheet" href="css/animate.min.css">
+
+<script>
+var chart, offline;
+var item = false;
+// Initialize Firebase
+var config = {
+    apiKey: "AIzaSyDLz_uMSYBgwPOfyS7xvRFULfK4DA9cGtI",
+    authDomain: "last-firebase-30d35.firebaseapp.com",
+    databaseURL: "https://last-firebase-30d35.firebaseio.com",
+    projectId: "last-firebase-30d35",
+    storageBucket: "last-firebase-30d35.appspot.com",
+    messagingSenderId: "814040862001",
+    appId: "1:814040862001:web:c1ee30db4ca5071c3ef410",
+    measurementId: "G-SEBV86YPYV"
+  };
+
+$(document).ready(function(e) {
+	$.material.init()
+
+	chart = new CanvasJS.Chart("chartContainer", {
+		title: {
+			text: "Weather DashBoard"
+		},
+		axisX:{
+			valueFormatString: "HH:mm"
+      // 시간 값
+		},
+		axisY: {
+			valueFormatString: "0.0#"
+      // 온습도 값
+		},
+		toolTip: {
+			shared: true,
+			contentFormatter: function (e) {
+				var content = CanvasJS.formatDate(e.entries[0].dataPoint.x, "HH:mm:ss") + "<br>";
+				content += "<strong>Temperature</strong>: " + e.entries[0].dataPoint.y + " ℃<br>";
+				content += "<strong>Humidity</strong>: " + e.entries[1].dataPoint.y + " %";
+				return content;
+        // tooltip 내의 시간, 온 습도 값을 반환
+			}
+		},
+		animationEnabled: true,
+		data: [
+      // 차트 유형 설정
+			{
+				type: "spline",
+				dataPoints: []
+			},
+			{
+				type: "spline",
+				dataPoints: []
+			}
+		]
+	});
+	chart.render();
+
+	firebase.initializeApp(config);
+
+	var logDHT = firebase.database().ref().child("logDHT/");
+
+  //canvasjs에 값을 붙여주고 Current Data화면에 값을 넣어주고 status의 색을 바꿔주면서 ONLINE으로 전환
+	logDHT.on("child_added", function(snap) {
+		if (!item) return;
+		var row = snap.val();
+
+		row.date = new Date(row.date);
+		chart.options.data[0].dataPoints.push({x: row.date, y: row.temperature});
+		chart.options.data[1].dataPoints.push({x: row.date, y: row.humidity});
+		chart.render();
+
+		$("#temperature > .content").html(row.temperature + " ℃");
+		$("#humidity > .content").text(row.humidity + " %");
+
+		$("#status").removeClass("danger").addClass("success");
+		$("#status > .content").text("ONLINE");
+
+		setTimeoffline();
+	});
+
+// 값들을 시간 순서대로 정렬
+	var now = new Date();
+	logDHT.orderByChild("date").startAt(now.getFullYear() + "-" + (now.getMonth()) + "-" + now.getDate()).once("value", function(snap) {
+		item = true;
+		var dataRows = snap.val();
+		var lastRow = 0;
+		console.log(dataRows);
+		$.each(dataRows, function(index, row) {
+
+			row.date = new Date(row.date);
+			chart.options.data[0].dataPoints.push({x: row.date, y: row.temperature});
+			chart.options.data[1].dataPoints.push({x: row.date, y: row.humidity});
+			 lastRow = row;
+		});
+		chart.render();
+
+// canvasjs의 마지막 값을 Current Data에 넣기
+		var LastRow = lastRow;
+		$("#temperature > .content").html(LastRow.temperature + " ℃");
+		$("#humidity > .content").text(LastRow.humidity + " %");
+
+//ONLINE과 OFFLINE 전환
+		var now = new Date();
+		LastRow.date = new Date(LastRow.date);
+		if (Math.round(now) -  Math.round(LastRow.date) < (2 * 60 * 1000)) {
+			$("#status").removeClass("danger").addClass("success");
+			$("#status > .content").text("ONLINE");
+		} else {
+			$("#status").removeClass("success").addClass("danger");
+			$("#status > .content").text("OFFLINE");
+		}
+		setTimeoffline();
+	});
+});
+
+var setTimeoffline = function() {
+	if (typeof offline === "number") clearTimeout(offline);
+
+	offline = setTimeout(function() {
+		$("#status").removeClass("success").addClass("danger");
+		$("#status > .content").text("OFFLINE");
+	}, 2 * 60 * 1000);
+}
+</script>
+
+<style>
+.dialog {
+	width: 100%;
+	border-radius: 4px;
+	margin-bottom: 20px;
+	box-shadow: 0 1px 6px 0 rgba(0, 0, 0, 0.12), 0 1px 6px 0 rgba(0, 0, 0, 0.12);
+}
+.dialog > .content {
+	padding: 30px 0;
+	border-radius: 6px 6px 0 0;
+	font-size: 64px;
+	color: rgba(255,255,255, 0.84);
+	text-align: center;
+}
+.dialog.primary > .content{
+	background: #21e016;
+  /* Current Data의 온도 배경 색 */
+}
+.dialog.success > .content {
+	background: #3100ad;
+  /* Current Data의 ONLINE 배경 색 */
+}
+.dialog.info > .content {
+	background: #0fb6f2;
+  /* Current Data의 습도 배경 색 */
+}
+.dialog.warning > .content {
+  background: #FFFFFF;
+}
+
+.dialog.danger > .content {
+  background: #ff00aa;
+  /* Current Data의 OFFLINE 배경 색 */
+}
+.dialog > .title {
+  background: #FFF;
+	border-radius: 0 0 6px 6px;
+	font-size: 22px;
+	color: rgba(0,0,0, 0.87);
+	text-align: center;
+	padding: 10px 0;
+	font-weight: bold;
+  /* 온습도, 센서 상태 제목 */
+}
+.nav-tabs {
+	margin-bottom: 20px;
+}
+</style>
+</head>
+
+<body>
+  <div class="container">
+    <h1>Weather Monitor <small>201524652 이승철</small></h1>
+    <hr />
+
+    <!-- Nav tabs -->
+    <!-- 선택하여 화면 전환 -->
+    <ul class="nav nav-tabs" role="tablist">
+      <li role="presentation" class="active"><a href="#Current Data" aria-controls="home" role="tab" data-toggle="tab">Current Data</a></li>
+      <li role="presentation"><a href="#Dashboard" aria-controls="profile" role="tab" data-toggle="tab">Dashboard</a></li>
+    </ul>
+
+    <!-- Tab panes -->
+    <div class="tab-content">
+      <!-- Nav 메뉴 중 하나인 Current Data 화면 -->
+      <div role="tabpanel" class="tab-pane active" id="Current Data">
+        <div class="row">
+           <div class="col-sm-4">
+             <div class="dialog primary fadeIn animated" id="temperature">
+               <div class="content">00.0 ℃</div>
+               <div class="title">온도</div>
+             </div>
+           </div>
+           <div class="col-sm-4">
+             <div class="dialog info fadeIn animated" id="humidity">
+               <div class="content">00.0 %</div>
+               <div class="title">습도</div>
+             </div>
+           </div>
+           <div class="col-sm-4">
+             <div class="dialog success fadeIn animated" id="status">
+               <div class="content">???</div>
+               <div class="title">센서 상태</div>
+             </div>
+           </div>
+        </div>
+      </div>
+<!-- Nav 메뉴 중 하나인 Dashboard 화면 -->
+      <div role="tabpanel" class="tab-pane" id="Dashboard">
+        <div id="chartContainer" style="height: 350px; width: 100%;"></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
